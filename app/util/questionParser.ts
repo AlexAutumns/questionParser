@@ -1,80 +1,114 @@
-export const parseBasicQuestion = (userInput: string) => {
+// Settings
+const SETTINGS = [
+    "basic", // always selected, not shown
+    "multiple",
+    "choiceLetter",
+    "codeChoices",
+] as const;
+
+type Setting = (typeof SETTINGS)[number];
+
+export const parseQuestions = (
+    userInput: string,
+    settings: Set<Setting>
+): {
+    question: string;
+    questionDetails: { text: string[]; detailList: string[] };
+    choices: string[];
+} => {
     let question = "";
-    let questionDetails = [""];
-    let choices: string[] = [];
-
-    const lines = userInput.split("\n").filter((line) => line.trim() !== "");
-    if (lines.length > 0) {
-        question = lines[0];
-        choices = lines
-            .slice(1)
-            .map(
-                (choice, index) =>
-                    `${String.fromCharCode(65 + index)}. ${choice}`
-            );
-    }
-
-    return {
-        question,
-        questionDetails,
-        choices,
+    let questionDetails: { text: string[]; detailList: string[] } = {
+        text: [],
+        detailList: [],
     };
-};
-
-export const parseMultipleAnswersQuestion = (userInput: string) => {
-    let question = "";
-    let questionDetails = [""];
     let choices: string[] = [];
 
-    const lines = userInput.split("\n").filter((line) => line.trim() !== "");
-    if (lines.length > 0) {
-        question = lines[0] + " (Select all that apply)";
-        choices = lines
-            .slice(1)
-            .map(
-                (choice, index) =>
-                    `${String.fromCharCode(65 + index)}. ${choice}`
-            );
-    }
+    const lines = userInput.split("\n");
 
-    return {
-        question,
-        questionDetails,
-        choices,
-    };
-};
+    // Splitting the Question and Choices
+    const splitLines = lines.reduce(
+        (acc: string[][], curr: string, index: number) => {
+            if (
+                curr === "" &&
+                index > 0 &&
+                lines[index - 1] === "" &&
+                lines[index - 2] === ""
+            ) {
+                acc.push([curr]); // Start new group/subarray
+            } else if (acc[acc.length - 1].length > 0 || curr !== "") {
+                acc[acc.length - 1].push(curr); // Append to the current group/subarray
+            }
+            return acc;
+        },
+        [[]]
+    );
 
-export const parseSequenceQuestion = (userInput: string) => {
-    let question = "";
-    let questionDetails: string[] = [];
-    let choices: string[] = [];
+    const splitLinesA = splitLines[0] || [];
+    const splitLinesB = splitLines.length > 1 ? splitLines[1] : [];
 
-    const lines = userInput.split("\n").filter((line) => line.trim() !== "");
-
-    if (lines.length > 0) {
-        // First line is the question
-        question = lines[0];
-
-        const sequenceSteps: string[] = [];
-        let i = 1;
-
-        // Collect all the Roman numeral lines as details
-        while (i < lines.length && /^[ivxlc]+\.\s+/i.test(lines[i])) {
-            sequenceSteps.push(lines[i]);
-            i++;
+    // Extracting and Formatting the Choices
+    let choiceLetter = "A";
+    for (let i = 0; i < splitLinesB.length; i++) {
+        if (splitLinesB[i].trim() !== "") {
+            let combinedChoice = ``;
+            if (splitLinesB[i + 1] !== "" && i + 1 < splitLinesB.length) {
+                combinedChoice = splitLinesB[i] + " " + splitLinesB[i + 1];
+                i++;
+            } else {
+                combinedChoice = splitLinesB[i];
+            }
+            if (settings.has("choiceLetter")) {
+                choices.push(`${choiceLetter}. ${combinedChoice}`);
+                choiceLetter = String.fromCharCode(
+                    choiceLetter.charCodeAt(0) + 1
+                );
+            } else {
+                choices.push(combinedChoice);
+            }
         }
-
-        // Remaining lines are the answer choices
-        const rawChoices = lines.slice(i);
-
-        // Format answer choices with A., B., etc.
-        choices = rawChoices.map((choice, index) => {
-            return `${String.fromCharCode(65 + index)}. ${choice}`;
-        });
-
-        // Set the question details as a string array
-        questionDetails = sequenceSteps;
     }
+
+    // Extracting and Formatting the Question and Details
+    question = splitLinesA[0];
+    const detailText = [];
+    const detailList = [];
+
+    let currentListItem = "";
+
+    for (let i = 1; i < splitLinesA.length; i++) {
+        if (splitLinesA[i] !== "") {
+            if (splitLinesA[i].match(/^(?:[ivxlcdmIVXLCDM]+\.\s|\d+\.\s)/)) {
+                // Check for both cases
+                if (currentListItem) {
+                    detailList.push(currentListItem);
+                }
+                currentListItem = splitLinesA[i];
+            } else {
+                if (currentListItem) {
+                    currentListItem += ` ${splitLinesA[i]}`;
+                } else {
+                    detailText.push(splitLinesA[i]);
+                }
+            }
+        }
+    }
+
+    if (currentListItem) {
+        detailList.push(currentListItem);
+    }
+
+    questionDetails.text = detailText;
+    questionDetails.detailList = detailList;
+
+    if (settings.has("multiple")) {
+        question += " (Select all that apply)";
+    }
+
+    console.log({
+        question,
+        questionDetails,
+        choices,
+    });
 
     return {
         question,
@@ -82,3 +116,5 @@ export const parseSequenceQuestion = (userInput: string) => {
         choices,
     };
 };
+
+// TODO 2: Implement the parseCodeInChoices function
